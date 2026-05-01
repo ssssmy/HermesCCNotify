@@ -251,22 +251,6 @@ hermes webhook subscribe claude-code-notify \
 - **HMAC 签名**：安全验证，防伪造请求
 - **自动路由**：Hermes 自动投递到已连接的消息通道
 
-## 对比 CodeIsland
-
-| 特性 | CodeNotify | CodeIsland |
-|---------|-----------|------------|
-| macOS 系统通知 | ✅ | ✅ |
-| 推送到聊天应用 | ✅（通过 Hermes） | ❌ |
-| Webhook 投递 | ✅ | ❌ |
-| macOS 灵动岛面板 | ❌ | ✅ |
-| 权限审批 UI | ❌ | ✅ |
-| 支持 AI 工具数 | 1（Claude Code） | 22 |
-| 安装体积 | ~5 KB shell 脚本 | ~15 MB Swift 应用 |
-| 跨平台 | ✅（Unix） | ❌（仅 macOS） |
-| 开源协议 | ✅ MIT | ✅ MIT |
-
-CodeNotify 刻意保持极简。它只做一件事——任务完成时通知你——零依赖（bash + curl + python3）。如果你需要带权限管理、灵动岛面板的丰富 macOS 原生体验，用 [CodeIsland](https://github.com/wxtsky/CodeIsland)。
-
 ## 文件结构
 
 ```
@@ -278,7 +262,6 @@ CodeNotify/
   uninstall.sh           卸载脚本（移除钩子）
 
 ~/.code-notify/          （运行时创建）
-  events/                待投递的事件文件
   config                 用户配置（webhook 地址等）
   bridge.log             运行日志
 ```
@@ -318,6 +301,12 @@ CodeNotify/
 - 查看 `~/.code-notify/bridge.log` 里的连接错误。
 - Webhook 投递是 fire-and-forget 模式，超时 10 秒。
 
+### "Hermes Webhook 不投递"
+
+- 检查 Gateway 是否运行：`curl http://localhost:8644/health`
+- 检查订阅状态：`hermes webhook list`
+- 查看 Gateway 日志：`grep webhook ~/.hermes/logs/gateway.log | tail -10`
+
 ## 贡献
 
 欢迎提交 Bug 报告和 Pull Request。提交 PR 前请：
@@ -325,10 +314,6 @@ CodeNotify/
 1. 手动测试桥接脚本（见故障排查章节）
 2. 在干净配置上测试安装 + 卸载
 3. 保持零依赖原则——只用 bash + python3 + curl
-
-## 致谢
-
-灵感来自 [CodeIsland](https://github.com/wxtsky/CodeIsland)——优秀的 macOS 灵动岛 AI 编码代理状态面板，率先展示了 Claude Code hook 监控的威力。
 
 ## 许可证
 
