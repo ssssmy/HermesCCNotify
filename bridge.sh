@@ -12,11 +12,14 @@ set -euo pipefail
 NOTIFY_DIR="${HOME}/.code-notify"
 CONFIG_FILE="${NOTIFY_DIR}/config"
 LOG_FILE="${NOTIFY_DIR}/bridge.log"
-HERMES_WEBHOOK="http://localhost:8644/webhooks/claude-code-notify"
-HERMES_SECRET="Ybs_z9rAymcGS7XPf5S8lJI-9njhOp7ozK3x7ocYp5I"
+HERMES_WEBHOOK="${HERMES_WEBHOOK:-http://localhost:8644/webhooks/claude-code-notify}"
+HERMES_SECRET="${HERMES_SECRET:-your-hmac-secret-here}"
 VERSION_MARKER="code-notify-v1"
 
 mkdir -p "${NOTIFY_DIR}"
+
+# Load local secrets (HERMES_WEBHOOK, HERMES_SECRET)
+[ -f "${CONFIG_FILE}" ] && source "${CONFIG_FILE}" 2>/dev/null || true
 
 log() { echo "[$(date -Iseconds)] $*" >> "${LOG_FILE}"; }
 
