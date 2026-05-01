@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# CodeNotify bridge.sh
+# HermesCCNotify bridge.sh
 # Called by Claude Code Stop hook.
 # Reads event JSON from stdin, delivers notifications:
 #   1. macOS system notification (always, instant)
@@ -9,12 +9,12 @@
 # ============================================================
 set -euo pipefail
 
-NOTIFY_DIR="${HOME}/.code-notify"
+NOTIFY_DIR="${HOME}/.hermesccnotify"
 CONFIG_FILE="${NOTIFY_DIR}/config"
 LOG_FILE="${NOTIFY_DIR}/bridge.log"
-HERMES_WEBHOOK="${HERMES_WEBHOOK:-http://localhost:8644/webhooks/claude-code-notify}"
+HERMES_WEBHOOK="${HERMES_WEBHOOK:-http://localhost:8644/webhooks/hermesccnotify}"
 HERMES_SECRET="${HERMES_SECRET:-your-hmac-secret-here}"
-VERSION_MARKER="code-notify-v1"
+VERSION_MARKER="hermesccnotify-v1"
 
 mkdir -p "${NOTIFY_DIR}"
 
@@ -99,14 +99,14 @@ fi
 
 # --- 2. Hermes webhook (push to messaging channels) ---
 SIGNATURE=$(hmac_sign "${PAYLOAD}")
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --noproxy '*' -X POST "${HERMES_WEBHOOK}" -H "Content-Type: application/json" -H "X-Hub-Signature-256: ${SIGNATURE}" -H "User-Agent: CodeNotify/1.0" -d "${PAYLOAD}" --connect-timeout 3 --max-time 8 2>/dev/null || echo "000")
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --noproxy '*' -X POST "${HERMES_WEBHOOK}" -H "Content-Type: application/json" -H "X-Hub-Signature-256: ${SIGNATURE}" -H "User-Agent: HermesCCNotify/1.0" -d "${PAYLOAD}" --connect-timeout 3 --max-time 8 2>/dev/null || echo "000")
 log "Hermes webhook: HTTP ${HTTP_CODE}"
 
 # --- 3. Optional direct webhook (from config) ---
 if [ -f "${CONFIG_FILE}" ]; then
     WEBHOOK_URL=$(grep -E '^WEBHOOK_URL=' "${CONFIG_FILE}" 2>/dev/null | cut -d= -f2- | tr -d '"' | tr -d "'" || echo "")
     if [ -n "${WEBHOOK_URL}" ]; then
-        curl -s -X POST "${WEBHOOK_URL}"             -H "Content-Type: application/json"             -H "User-Agent: CodeNotify/1.0"             -d "${PAYLOAD}"             --connect-timeout 5 --max-time 10 >/dev/null 2>&1 || true
+        curl -s -X POST "${WEBHOOK_URL}"             -H "Content-Type: application/json"             -H "User-Agent: HermesCCNotify/1.0"             -d "${PAYLOAD}"             --connect-timeout 5 --max-time 10 >/dev/null 2>&1 || true
         log "Direct webhook delivered"
     fi
 fi

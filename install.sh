@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# CodeNotify install.sh
+# HermesCCNotify install.sh
 # Installs Stop hook into Claude Code settings.
 # Usage: install.sh [--global] [--project DIR] [--webhook URL] [--force] [--dry-run]
 # ============================================================
@@ -8,15 +8,15 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BRIDGE_PATH="${SCRIPT_DIR}/bridge.sh"
-NOTIFY_DIR="${HOME}/.code-notify"
+NOTIFY_DIR="${HOME}/.hermesccnotify"
 CONFIG_FILE="${NOTIFY_DIR}/config"
-VERSION_MARKER="code-notify-v1"
+VERSION_MARKER="hermesccnotify-v1"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 
 banner() {
     echo ""
-    echo -e "${CYAN}  CodeNotify - Real-time Claude Code notifications${NC}"
+    echo -e "${CYAN}  HermesCCNotify - Real-time Claude Code notifications${NC}"
     echo ""
 }
 

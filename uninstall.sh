@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ============================================================
-# CodeNotify uninstall.sh
+# HermesCCNotify uninstall.sh
 # Removes the Stop hook from Claude Code settings.
 # ============================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BRIDGE_PATH="${SCRIPT_DIR}/bridge.sh"
-VERSION_MARKER="code-notify-v1"
+VERSION_MARKER="hermesccnotify-v1"
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 
 SCOPE="global"; PROJECT_DIR=""; FORCE=false
@@ -19,7 +19,7 @@ while [[ $# -gt 0 ]]; do
         --force) FORCE=true; shift ;;
         -h|--help)
             echo "Usage: uninstall.sh [--global] [--project DIR]"
-            echo "Removes CodeNotify hook from Claude Code settings."
+            echo "Removes HermesCCNotify hook from Claude Code settings."
             exit 0 ;;
         *) echo -e "${RED}Unknown: $1${NC}"; exit 1 ;;
     esac
@@ -70,5 +70,5 @@ END_PYTHON
 echo -e "${GREEN}Uninstalled from ${SETTINGS_FILE}${NC}"
 
 # Clean up runtime files
-rm -rf "${HOME}/.code-notify"
-echo -e "${GREEN}Cleaned up ~/.code-notify/${NC}"
+rm -rf "${HOME}/.hermesccnotify"
+echo -e "${GREEN}Cleaned up ~/.hermesccnotify/${NC}"
