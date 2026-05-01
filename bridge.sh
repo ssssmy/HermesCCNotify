@@ -99,7 +99,7 @@ fi
 
 # --- 2. Hermes webhook (push to messaging channels) ---
 SIGNATURE=$(hmac_sign "${PAYLOAD}")
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}"     -X POST "${HERMES_WEBHOOK}"     -H "Content-Type: application/json"     -H "X-Hub-Signature-256: ${SIGNATURE}"     -H "User-Agent: CodeNotify/1.0"     -d "${PAYLOAD}"     --connect-timeout 3 --max-time 8 2>/dev/null || echo "000")
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --noproxy '*' -X POST "${HERMES_WEBHOOK}" -H "Content-Type: application/json" -H "X-Hub-Signature-256: ${SIGNATURE}" -H "User-Agent: CodeNotify/1.0" -d "${PAYLOAD}" --connect-timeout 3 --max-time 8 2>/dev/null || echo "000")
 log "Hermes webhook: HTTP ${HTTP_CODE}"
 
 # --- 3. Optional direct webhook (from config) ---
