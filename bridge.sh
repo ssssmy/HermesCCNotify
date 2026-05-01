@@ -69,10 +69,11 @@ ts = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 payload = {
     'session_id': session_id, 'project': project, 'cwd': cwd,
-    'model': model, 'stop_reason': stop_reason,
-    'last_user_message': last_user[:200] if last_user else '',
-    'last_assistant_message': last_assistant[:300] if last_assistant else '',
-    'total_tokens': total_tokens, 'timestamp': ts,
+    'model': model or 'unknown',
+    'stop_reason': stop_reason or 'completed',
+    'last_user_message': last_user[:200] if last_user else '(no prompt)',
+    'last_assistant_message': last_assistant[:300] if last_assistant else '(no response)',
+    'total_tokens': total_tokens or 'N/A', 'timestamp': ts,
     'transcript_path': transcript_path,
 }
 print(json.dumps(payload, ensure_ascii=False))
