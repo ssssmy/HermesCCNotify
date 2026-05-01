@@ -42,25 +42,57 @@ if [ -z "${INPUT}" ]; then
 fi
 
 PAYLOAD=$(echo "${INPUT}" | python3 -c "
-import sys, json
+import sys, json, os
+
 try: data = json.load(sys.stdin)
 except: sys.exit(1)
 
 session_id = data.get('session_id', 'unknown')
 cwd = data.get('cwd', '')
-stop_reason = data.get('stop_reason', '')
-model = data.get('model', '')
 transcript_path = data.get('transcript_path', '')
-
+model = data.get('model', '')
+stop_reason = data.get('stop_reason', data.get('stop_hook_active', ''))
+stop_reason = 'end_turn' if stop_reason == False else (stop_reason or 'completed')
 last_user = data.get('last_user_message', '')
 last_assistant = data.get('last_assistant_message', '')
 
-usage = data.get('usage', {})
+# Extract missing fields from JSONL transcript
 total_tokens = ''
-if isinstance(usage, dict):
-    inp = usage.get('input_tokens', 0)
-    out = usage.get('output_tokens', 0)
-    if inp or out: total_tokens = f'{inp}->{out}'
+if transcript_path and os.path.exists(transcript_path):
+    try:
+        with open(transcript_path) as f:
+            lines = f.readlines()[-50:]
+        for line in reversed(lines):
+            try:
+                entry = json.loads(line)
+            except:
+                continue
+            t = entry.get('type', '')
+            msg = entry.get('message', {})
+            # Get model + tokens from last assistant message
+            if t == 'assistant':
+                if not model and msg.get('model'):
+                    model = msg['model']
+                if not stop_reason or stop_reason == 'completed':
+                    sr = msg.get('stop_reason', '')
+                    if sr: stop_reason = sr
+                if not total_tokens:
+                    u = msg.get('usage', {})
+                    inp = u.get('input_tokens', 0)
+                    out = u.get('output_tokens', 0)
+                    if inp or out:
+                        total_tokens = f'{inp}->{out}'
+            # Get last user message
+            if not last_user and t == 'user':
+                content = msg.get('content', '')
+                if isinstance(content, list):
+                    content = ' '.join([c.get('text','') for c in content if isinstance(c, dict)])
+                if content and content.strip():
+                    last_user = content.strip()
+            if model and last_user and total_tokens and stop_reason not in ('', 'completed'):
+                break
+    except:
+        pass
 
 project = cwd.split('/')[-1] if cwd else 'unknown'
 
@@ -70,7 +102,7 @@ ts = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 payload = {
     'session_id': session_id, 'project': project, 'cwd': cwd,
     'model': model or 'unknown',
-    'stop_reason': stop_reason or 'completed',
+    'stop_reason': stop_reason,
     'last_user_message': last_user[:200] if last_user else '(no prompt)',
     'last_assistant_message': last_assistant[:300] if last_assistant else '(no response)',
     'total_tokens': total_tokens or 'N/A', 'timestamp': ts,
