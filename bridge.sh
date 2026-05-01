@@ -1,44 +1,52 @@
 #!/usr/bin/env bash
 # ============================================================
 # CodeNotify bridge.sh
-# Called by Claude Code Stop hook. Reads event JSON from stdin,
-# extracts key info, and delivers notifications.
+# Called by Claude Code Stop hook.
+# Reads event JSON from stdin, delivers notifications:
+#   1. macOS system notification (always, instant)
+#   2. POST to Hermes webhook -> messaging channels
+#   3. Optional: direct webhook URL from config
 # ============================================================
 set -euo pipefail
 
 NOTIFY_DIR="${HOME}/.code-notify"
-EVENTS_DIR="${NOTIFY_DIR}/events"
 CONFIG_FILE="${NOTIFY_DIR}/config"
 LOG_FILE="${NOTIFY_DIR}/bridge.log"
+HERMES_WEBHOOK="http://localhost:8644/webhooks/claude-code-notify"
+HERMES_SECRET="Ybs_z9rAymcGS7XPf5S8lJI-9njhOp7ozK3x7ocYp5I"
 VERSION_MARKER="code-notify-v1"
 
-mkdir -p "${EVENTS_DIR}"
+mkdir -p "${NOTIFY_DIR}"
 
-# --- logging ---
-log() {
-    echo "[$(date -Iseconds)] $*" >> "${LOG_FILE}"
+log() { echo "[$(date -Iseconds)] $*" >> "${LOG_FILE}"; }
+
+# --- hmac-sha256 helper ---
+hmac_sign() {
+    echo -n "$1" | python3 -c "
+import sys, hmac, hashlib
+key = bytes.fromhex('$(echo -n "${HERMES_SECRET}" | xxd -p | tr -d '\n')')
+msg = sys.stdin.buffer.read()
+sig = hmac.new(key, msg, hashlib.sha256).hexdigest()
+print(f'sha256={sig}')
+"
 }
 
 # --- read and parse stdin ---
 INPUT=$(cat)
 if [ -z "${INPUT}" ]; then
-    log "ERROR: empty stdin, skipping"
+    log "ERROR: empty stdin"
     exit 0
 fi
 
-# Extract fields with python3 for robust JSON parsing
 PAYLOAD=$(echo "${INPUT}" | python3 -c "
 import sys, json
-try:
-    data = json.load(sys.stdin)
-except:
-    sys.exit(1)
+try: data = json.load(sys.stdin)
+except: sys.exit(1)
 
 session_id = data.get('session_id', 'unknown')
 cwd = data.get('cwd', '')
 stop_reason = data.get('stop_reason', '')
 model = data.get('model', '')
-permission_mode = data.get('permission_mode', '')
 transcript_path = data.get('transcript_path', '')
 
 last_user = data.get('last_user_message', '')
@@ -49,8 +57,7 @@ total_tokens = ''
 if isinstance(usage, dict):
     inp = usage.get('input_tokens', 0)
     out = usage.get('output_tokens', 0)
-    if inp or out:
-        total_tokens = f'{inp}->{out}'
+    if inp or out: total_tokens = f'{inp}->{out}'
 
 project = cwd.split('/')[-1] if cwd else 'unknown'
 
@@ -58,62 +65,48 @@ from datetime import datetime, timezone
 ts = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 payload = {
-    'session_id': session_id,
-    'project': project,
-    'cwd': cwd,
-    'model': model,
-    'stop_reason': stop_reason,
-    'permission_mode': permission_mode,
+    'session_id': session_id, 'project': project, 'cwd': cwd,
+    'model': model, 'stop_reason': stop_reason,
     'last_user_message': last_user[:200] if last_user else '',
     'last_assistant_message': last_assistant[:300] if last_assistant else '',
-    'total_tokens': total_tokens,
-    'timestamp': ts,
+    'total_tokens': total_tokens, 'timestamp': ts,
     'transcript_path': transcript_path,
 }
-
 print(json.dumps(payload, ensure_ascii=False))
 " 2>/dev/null || echo "")
 
 if [ -z "${PAYLOAD}" ]; then
-    log "ERROR: JSON parse failed"
-    echo "${INPUT}" > "${EVENTS_DIR}/_parse_error.json"
+    log "ERROR: parse failed"
     exit 0
 fi
 
-# Extract fields
-SESSION_ID=$(echo "${PAYLOAD}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('session_id',''))")
-PROJECT=$(echo "${PAYLOAD}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('project',''))")
-MODEL=$(echo "${PAYLOAD}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('model',''))")
-STOP_REASON=$(echo "${PAYLOAD}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('stop_reason',''))")
-LAST_ASSISTANT=$(echo "${PAYLOAD}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('last_assistant_message',''))")
+PROJECT=$(echo "${PAYLOAD}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('project',''))")
+MODEL=$(echo "${PAYLOAD}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('model',''))")
+STOP_REASON=$(echo "${PAYLOAD}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('stop_reason',''))")
+LAST_ASSISTANT=$(echo "${PAYLOAD}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('last_assistant_message',''))")
 
-# --- Write event file ---
-TS=$(date +%s)
-EVENT_FILE="${EVENTS_DIR}/${TS}-${SESSION_ID}.json"
-echo "${PAYLOAD}" > "${EVENT_FILE}"
-log "Event written: ${EVENT_FILE}"
-
-# --- macOS notification ---
-NOTIFY_TITLE="Claude Code - ${PROJECT}"
-if [ -n "${LAST_ASSISTANT}" ]; then
-    NOTIFY_BODY=$(echo "${LAST_ASSISTANT}" | head -c 120)
-else
-    NOTIFY_BODY="Task completed (${STOP_REASON})"
-fi
-
+# --- 1. macOS notification (instant) ---
 if command -v osascript &>/dev/null; then
-    osascript -e "display notification \"${NOTIFY_BODY}\" with title \"${NOTIFY_TITLE}\" subtitle \"${MODEL}\" sound name \"Glass\"" 2>/dev/null || true
+    TITLE="Claude Code · ${PROJECT}"
+    BODY="${LAST_ASSISTANT:0:120}"
+    [ -z "${BODY}" ] && BODY="Task completed (${STOP_REASON})"
+    osascript -e "display notification \"${BODY}\" with title \"${TITLE}\" subtitle \"${MODEL}\" sound name \"Glass\"" 2>/dev/null || true
     log "macOS notification sent"
 fi
 
-# --- Optional webhook delivery ---
+# --- 2. Hermes webhook (push to messaging channels) ---
+SIGNATURE=$(hmac_sign "${PAYLOAD}")
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}"     -X POST "${HERMES_WEBHOOK}"     -H "Content-Type: application/json"     -H "X-Hub-Signature-256: ${SIGNATURE}"     -H "User-Agent: CodeNotify/1.0"     -d "${PAYLOAD}"     --connect-timeout 3 --max-time 8 2>/dev/null || echo "000")
+log "Hermes webhook: HTTP ${HTTP_CODE}"
+
+# --- 3. Optional direct webhook (from config) ---
 if [ -f "${CONFIG_FILE}" ]; then
     WEBHOOK_URL=$(grep -E '^WEBHOOK_URL=' "${CONFIG_FILE}" 2>/dev/null | cut -d= -f2- | tr -d '"' | tr -d "'" || echo "")
     if [ -n "${WEBHOOK_URL}" ]; then
         curl -s -X POST "${WEBHOOK_URL}"             -H "Content-Type: application/json"             -H "User-Agent: CodeNotify/1.0"             -d "${PAYLOAD}"             --connect-timeout 5 --max-time 10 >/dev/null 2>&1 || true
-        log "Webhook delivered"
+        log "Direct webhook delivered"
     fi
 fi
 
-log "Done: session=${SESSION_ID} project=${PROJECT} reason=${STOP_REASON}"
+log "Done: project=${PROJECT} reason=${STOP_REASON} hermes=${HTTP_CODE}"
 exit 0
