@@ -109,11 +109,8 @@ print(json.dumps(d))
 
     # Block and wait for reply file
     REPLY_FILE="${REPLIES_DIR}/${SESSION_ID}.reply"
-    WAIT_FILE="${REPLIES_DIR}/${SESSION_ID}.reply.wait"
-    REPLY_TIMEOUT=86400  # 24 hours
+    REPLY_TIMEOUT=86400  # 24 hours (matches hook timeout)
 
-    # Signal to cron job that we're waiting
-    echo "${QUESTION}" > "${WAIT_FILE}"
     log "Waiting for reply at ${REPLY_FILE} (timeout=${REPLY_TIMEOUT}s)"
     ELAPSED=0
     while [ ${ELAPSED} -lt ${REPLY_TIMEOUT} ]; do
@@ -121,7 +118,7 @@ print(json.dumps(d))
             ANSWER=$(cat "${REPLY_FILE}" 2>/dev/null)
             if [ -n "${ANSWER}" ]; then
                 log "Reply received: ${ANSWER:0:80}"
-                rm -f "${REPLY_FILE}" "${WAIT_FILE}"
+                rm -f "${REPLY_FILE}"
 
                 # Send answer back to Claude Code via stdout
                 cat <<END_RESPONSE
