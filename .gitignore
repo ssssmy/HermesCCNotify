@@ -1,0 +1,10 @@
+# CodeNotify - runtime files
+.code-notify/
+
+# macOS
+.DS_Store
+
+# Editor
+*.swp
+*.swo
+*~
