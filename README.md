@@ -4,52 +4,53 @@
 </h1>
 
 <p align="center">
-  <b>Real-time push notifications when Claude Code finishes a task</b><br>
+  <b>Claude Code 任务完成时，实时推送通知到你手里</b><br>
   macOS · Webhook · Telegram · Discord · Slack
 </p>
 
 <p align="center">
-  <a href="#how-it-works">How It Works</a> ·
-  <a href="#quick-start">Quick Start</a> ·
-  <a href="#usage">Usage</a> ·
-  <a href="#configuration">Configuration</a> ·
-  <a href="#hermes-integration">Hermes Integration</a>
+  <a href="#这是什么">这是什么</a> ·
+  <a href="#工作原理">工作原理</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#用法详解">用法详解</a> ·
+  <a href="#配置">配置</a> ·
+  <a href="#hermes-集成">Hermes 集成</a>
 </p>
 
 ---
 
-## What is CodeNotify?
+## 这是什么
 
-You ask Claude Code to refactor a module, switch to another window, and forget about it. Minutes later you wonder: "Is it done yet?"
+你让 Claude Code 去重构一个模块，切到别的窗口，然后就忘了。几分钟后你想："它搞完了没？"
 
-**CodeNotify** solves this. It hooks into Claude Code's native event system and pushes a notification the moment a task completes — to your Mac, your phone, or your team's Slack.
+**CodeNotify** 解决的就是这个。它挂载到 Claude Code 的原生事件系统上，任务完成的瞬间推送通知——到你的 Mac、手机、或团队 Slack。
 
-No polling. No window switching. Just a single lightweight shell script.
+不轮询。不用切窗口。只有一个轻量级的 shell 脚本。
 
-## How It Works
+## 工作原理
 
 ```
-You type a task in Claude Code
+你在 Claude Code 里输入任务
         │
         ▼
-Claude Code works on it...
+Claude Code 开始干活...
         │
         ▼
-Task completes → Stop hook fires
+任务完成 → Stop 钩子触发
         │
         ▼
-bridge.sh receives event JSON via stdin
+bridge.sh 从 stdin 接收事件 JSON
         │
-        ├──→ macOS notification (always, instant)
-        ├──→ Webhook POST (optional, any HTTP endpoint)
-        └──→ Event file → Hermes Cron → Telegram/Discord/Slack
+        ├──→ macOS 系统通知（始终开启，即时弹出）
+        ├──→ Webhook POST（可选，任意 HTTP 端点）
+        └──→ 事件文件 → Hermes 定时任务 → Telegram/Discord/Slack
 ```
 
-### The Hook System
+### 钩子系统
 
-Claude Code (v2.x+) supports a **hooks** system — shell commands that fire on specific lifecycle events. CodeNotify registers a hook on the `Stop` event, which Claude triggers after every completed response.
+Claude Code（v2.x+）内置了 **hooks** 系统——在特定生命周期事件触发时执行 shell 命令。CodeNotify 在 `Stop` 事件上注册钩子，Claude 每完成一轮回复就会触发。
 
-The hook calls `bridge.sh` with the full event payload on stdin:
+钩子调用 `bridge.sh`，把完整的事件载荷通过 stdin 传给它：
 
 ```json
 {
@@ -58,66 +59,65 @@ The hook calls `bridge.sh` with the full event payload on stdin:
   "cwd": "/Users/you/project",
   "model": "claude-sonnet-4-6",
   "stop_reason": "end_turn",
-  "last_user_message": "Refactor the auth module",
-  "last_assistant_message": "Done! Extracted JWT logic into...",
+  "last_user_message": "重构认证模块",
+  "last_assistant_message": "完成！已将 JWT 逻辑提取到独立模块...",
   "usage": { "input_tokens": 15420, "output_tokens": 3847 }
 }
 ```
 
-`bridge.sh` parses this, extracts the useful bits, and delivers notifications through every configured channel — all within 2 seconds, well under Claude's 5-second hook timeout.
+`bridge.sh` 解析这段数据，提取关键信息，然后通过所有已配置的通道投递通知——全程在 2 秒内完成，远低于 Claude Code 的 5 秒 hook 超时限制。
 
-## Quick Start
+## 快速开始
 
-### Prerequisites
+### 环境要求
 
-- **Claude Code** v2.x+ installed (`npm install -g @anthropic-ai/claude-code`)
-- **macOS** (for native notifications) or any Unix (webhook-only mode)
-- **Python 3** (usually pre-installed)
+- **Claude Code** v2.x+（`npm install -g @anthropic-ai/claude-code`）
+- **macOS**（用于系统通知）或任意 Unix（可只用 webhook）
+- **Python 3**（通常系统自带）
 
-### Install
+### 安装
 
 ```bash
-# Clone the repo
+# 克隆仓库
 git clone https://github.com/ssssmy/CodeNotify.git
 cd CodeNotify
 
-# Install globally (all Claude Code projects)
+# 全局安装（所有 Claude Code 项目生效）
 ./install.sh --global
 
-# Or install for a single project
+# 或者只安装到单个项目
 ./install.sh --project /path/to/your/project
 ```
 
-That's it. The next time Claude Code finishes a task, you'll get a macOS notification.
+搞定。下次 Claude Code 完成任务，你就会收到 macOS 通知。
 
-### With Webhook (Slack/Discord/etc.)
+### 配置 Webhook（Slack/Discord 等）
 
 ```bash
 ./install.sh --global --webhook "https://hooks.slack.com/services/..."
 ```
 
-### Uninstall
+### 卸载
 
 ```bash
 ./uninstall.sh --global
 ```
 
-## What You'll See
+## 通知效果
 
-### macOS Notification
+### macOS 通知
 
 ```
 ┌─────────────────────────────────────┐
 │ Claude Code · my-project            │
 │ claude-sonnet-4-6                   │
 │─────────────────────────────────────│
-│ Done! Extracted JWT logic into a    │
-│ separate module with refresh token  │
-│ rotation.                           │
+│ 完成！已将 JWT 逻辑提取到独立模块，  │
+│ 支持 refresh token 轮换。           │
 └─────────────────────────────────────┘
 ```
 
-### Chat Message (Telegram/Discord/Slack via Hermes)
+### 聊天消息（通过 Hermes 推送到 Telegram/Discord/Slack）
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━
@@ -125,48 +125,48 @@ That's it. The next time Claude Code finishes a task, you'll get a macOS notific
 Model: claude-sonnet-4-6  |  Status: end_turn
 Tokens: 15420→3847
 ━━━━━━━━━━━━━━━━━━━━━━━
-▶ Refactor the auth module to use JWT
+▶ 重构认证模块改用 JWT
 ───
-Done! Extracted JWT logic into a separate module
-with refresh token rotation. All tests passing.
+完成！已将 JWT 逻辑提取到独立模块，
+支持 refresh token 轮换。所有测试通过。
 ```
 
-## Usage
+## 用法详解
 
-### CLI Reference
+### 命令参考
 
-| Command | Description |
+| 命令 | 说明 |
 |---------|-------------|
-| `install.sh --global` | Install for all Claude Code projects |
-| `install.sh --project DIR` | Install for a specific project directory |
-| `install.sh --webhook URL` | Set webhook URL during install |
-| `install.sh --force` | Reinstall (overwrite existing hook) |
-| `install.sh --dry-run` | Preview changes without applying |
-| `uninstall.sh` | Remove from current directory |
-| `uninstall.sh --global` | Remove from global config |
-| `uninstall.sh --project DIR` | Remove from project config |
+| `install.sh --global` | 全局安装（所有项目生效） |
+| `install.sh --project DIR` | 安装到指定项目目录 |
+| `install.sh --webhook URL` | 安装时同时设置 webhook 地址 |
+| `install.sh --force` | 强制重装（覆盖已有钩子） |
+| `install.sh --dry-run` | 预览将要执行的操作 |
+| `uninstall.sh` | 从当前目录卸载 |
+| `uninstall.sh --global` | 从全局配置卸载 |
+| `uninstall.sh --project DIR` | 从指定项目卸载 |
 
-### Install Options Deep Dive
+### 安装模式说明
 
-**`--global`** — Adds the hook to `~/.claude/settings.json`. Every Claude Code session, in any project, will trigger CodeNotify. This is the recommended setup for most users.
+**`--global`** — 将钩子写入 `~/.claude/settings.json`。此后在任何项目里启动的 Claude Code 会话都会触发通知。推荐大多数用户使用。
 
 ```bash
 ./install.sh --global
 ```
 
-**`--project DIR`** — Adds the hook to `DIR/.claude/settings.json`. Only sessions started in that project directory will trigger notifications. Use this for focused workflows.
+**`--project DIR`** — 将钩子写入 `DIR/.claude/settings.json`。只有在该项目目录下启动的会话才会触发通知。适合聚焦式工作流。
 
 ```bash
 ./install.sh --project ~/work/main-project
 ```
 
-**`--webhook URL`** — Sets a webhook URL for direct HTTP delivery. The webhook receives a JSON payload with the full event data. Works with Slack, Discord, Zapier, n8n, or any HTTP endpoint.
+**`--webhook URL`** — 设置 webhook 地址，直接 HTTP 投递。接收端会拿到完整事件数据的 JSON。兼容 Slack、Discord、飞书、企业微信、Zapier、n8n 等。
 
 ```bash
 ./install.sh --global --webhook "https://hooks.slack.com/services/T00/B00/xxxx"
 ```
 
-Webhook payload format:
+Webhook 接收到的 JSON 格式：
 ```json
 {
   "session_id": "abc123...",
@@ -174,148 +174,148 @@ Webhook payload format:
   "cwd": "/Users/you/my-project",
   "model": "claude-sonnet-4-6",
   "stop_reason": "end_turn",
-  "last_user_message": "Refactor auth module",
-  "last_assistant_message": "Done! Extracted JWT logic...",
+  "last_user_message": "重构认证模块",
+  "last_assistant_message": "完成！已将 JWT 逻辑...",
   "total_tokens": "15420→3847",
   "timestamp": "2026-05-01T06:08:12Z",
   "transcript_path": "/Users/you/.claude/projects/.../session.jsonl"
 }
 ```
 
-## Configuration
+## 配置
 
-All configuration lives in `~/.code-notify/config`:
+所有配置在 `~/.code-notify/config`：
 
 ```
 WEBHOOK_URL=https://your-webhook-url
 ```
 
-Edit this file directly, or use the install script with `--webhook` to set it.
+可直接编辑此文件，或用 `--webhook` 参数在安装时设置。
 
-### Logs
+### 日志
 
-Bridge execution logs are at `~/.code-notify/bridge.log`:
+桥接脚本的运行日志在 `~/.code-notify/bridge.log`：
 
 ```bash
-# Watch live
+# 实时查看
 tail -f ~/.code-notify/bridge.log
 
-# Check recent activity
+# 查看最近活动
 tail -20 ~/.code-notify/bridge.log
 ```
 
-### Event Files
+### 事件文件
 
-Pending events (before Hermes cron delivers them) sit in `~/.code-notify/events/`. Each file is named `<unix_timestamp>-<session_id>.json`.
+等待 Hermes 定时任务投递的事件暂存在 `~/.code-notify/events/`。文件命名格式：`<unix时间戳>-<session_id>.json`。
 
-## Hermes Integration
+## Hermes 集成
 
-CodeNotify is designed to work standalone, but shines brightest with **Hermes Agent** — which delivers notifications to your messaging platforms.
+CodeNotify 可独立运行，但与 **Hermes Agent** 结合后体验最佳——将通知推送到你的即时通讯平台。
 
-### Setup
+### 配置
 
-After installing CodeNotify, load the `claude-code-notify` skill in Hermes and say:
+安装 CodeNotify 后，在 Hermes 中加载 `claude-code-notify` 技能，然后说：
 
 > **"setup claude code notify cron"**
 
-Hermes creates a cron job that:
-1. Polls `~/.code-notify/events/` every minute
-2. Reads new completion events
-3. Sends formatted messages to your connected channels
-4. Cleans up processed files
+Hermes 会创建一个定时任务：
+1. 每分钟轮询 `~/.code-notify/events/`
+2. 读取新的完成事件
+3. 发送格式化消息到已连接的消息通道
+4. 清理已处理的文件
 
-### Supported Channels
+### 支持的消息通道
 
-Via Hermes's `send_message` tool:
-- Telegram (channels, groups, DMs)
-- Discord (channels, threads)
-- Slack (channels)
+通过 Hermes 的 `send_message` 工具：
+- Telegram（频道、群组、私聊）
+- Discord（频道、讨论串）
+- Slack（频道）
 
-### Custom Delivery Target
+### 自定义投递目标
 
 > **"send claude code notify to telegram:#my-channel"**
 
-Hermes updates the cron job to target your preferred channel.
+Hermes 会更新定时任务，投递到你指定的通道。
 
-## How It Compares
+## 对比 CodeIsland
 
-| Feature | CodeNotify | CodeIsland |
+| 特性 | CodeNotify | CodeIsland |
 |---------|-----------|------------|
-| macOS notifications | ✅ | ✅ |
-| Push to chat apps | ✅ (via Hermes) | ❌ |
-| Webhook delivery | ✅ | ❌ |
-| macOS notch panel | ❌ | ✅ |
-| Permission approval UI | ❌ | ✅ |
-| 22 AI tools supported | 1 (Claude Code) | 22 |
-| Install size | ~5 KB shell scripts | ~15 MB Swift app |
-| Cross-platform | ✅ (Unix) | ❌ (macOS only) |
-| Open source | ✅ MIT | ✅ MIT |
+| macOS 系统通知 | ✅ | ✅ |
+| 推送到聊天应用 | ✅（通过 Hermes） | ❌ |
+| Webhook 投递 | ✅ | ❌ |
+| macOS 灵动岛面板 | ❌ | ✅ |
+| 权限审批 UI | ❌ | ✅ |
+| 支持 AI 工具数 | 1（Claude Code） | 22 |
+| 安装体积 | ~5 KB shell 脚本 | ~15 MB Swift 应用 |
+| 跨平台 | ✅（Unix） | ❌（仅 macOS） |
+| 开源协议 | ✅ MIT | ✅ MIT |
 
-CodeNotify is intentionally minimal. It does one thing — notify on task completion — and does it with zero dependencies beyond bash, curl, and python3. If you want a rich macOS-native panel with permission management and multi-tool support, use [CodeIsland](https://github.com/wxtsky/CodeIsland).
+CodeNotify 刻意保持极简。它只做一件事——任务完成时通知你——零依赖（bash + curl + python3）。如果你需要带权限管理、灵动岛面板的丰富 macOS 原生体验，用 [CodeIsland](https://github.com/wxtsky/CodeIsland)。
 
-## Files
+## 文件结构
 
 ```
 CodeNotify/
-  README.md              This file
-  LICENSE                MIT
-  bridge.sh              Hook handler (called by Claude Code)
-  install.sh             Installer (adds Stop hook to Claude settings)
-  uninstall.sh           Uninstaller (removes the hook)
+  README.md              本文档
+  LICENSE                MIT 协议
+  bridge.sh              钩子处理脚本（由 Claude Code 调用）
+  install.sh             安装脚本（向 Claude 配置注入 Stop 钩子）
+  uninstall.sh           卸载脚本（移除钩子）
 
-~/.code-notify/          (created at runtime)
-  events/                Pending notification event files
-  config                 User configuration (webhook URL)
-  bridge.log             Execution log
+~/.code-notify/          （运行时创建）
+  events/                待投递的事件文件
+  config                 用户配置（webhook 地址等）
+  bridge.log             运行日志
 ```
 
-## Troubleshooting
+## 故障排查
 
-### "Not getting notifications"
+### "收不到通知"
 
-1. **Check the hook is installed:**
+1. **检查钩子是否安装成功：**
    ```bash
    cat ~/.claude/settings.json | python3 -m json.tool | grep -A5 bridge.sh
    ```
-   You should see `code-notify-v1` in the output.
+   输出中应该能看到 `code-notify-v1`。
 
-2. **Check the bridge log:**
+2. **查看桥接日志：**
    ```bash
    tail -20 ~/.code-notify/bridge.log
    ```
-   Look for `ERROR` entries. If the log is empty, the hook isn't being called.
+   找 `ERROR` 条目。如果日志为空，说明钩子没被触发。
 
-3. **Test the bridge manually:**
+3. **手动测试桥接脚本：**
    ```bash
-   echo '{"hook_event_name":"Stop","session_id":"test-123","cwd":"/tmp/test","model":"claude-sonnet","stop_reason":"end_turn","last_user_message":"Hello","last_assistant_message":"Hi there!","usage":{"input_tokens":100,"output_tokens":50}}' | bash ./bridge.sh
+   echo '{"hook_event_name":"Stop","session_id":"test-123","cwd":"/tmp/test","model":"claude-sonnet","stop_reason":"end_turn","last_user_message":"你好","last_assistant_message":"你好！任务完成。","usage":{"input_tokens":100,"output_tokens":50}}' | bash ./bridge.sh
    ```
-   You should see a macOS notification pop up immediately.
+   应该立刻弹出一条 macOS 通知。
 
-4. **Claude Code version:** hooks require Claude Code v2.x+. Check with `claude --version`.
+4. **Claude Code 版本：** 钩子系统需要 Claude Code v2.x+。用 `claude --version` 检查。
 
-### "macOS notification not showing"
+### "macOS 通知没弹"
 
-- Make sure you haven't disabled notifications for Terminal.app or your terminal emulator in System Settings → Notifications.
-- The `osascript` command is used — it should be available on all macOS systems.
+- 检查「系统设置 → 通知」中是否禁用了终端（Terminal.app 或你用的终端模拟器）的通知权限。
+- `osascript` 命令在所有 macOS 上都自带，一般不会有问题。
 
-### "Webhook not receiving"
+### "Webhook 收不到"
 
-- Verify the URL with `curl -X POST <url> -d '{"test":true}'`
-- Check `~/.code-notify/bridge.log` for connection errors
-- Webhook delivery is fire-and-forget with a 10-second timeout
+- 先用 `curl -X POST <url> -d '{"test":true}'` 验证 webhook 地址是否可达。
+- 查看 `~/.code-notify/bridge.log` 里的连接错误。
+- Webhook 投递是 fire-and-forget 模式，超时 10 秒。
 
-## Contributing
+## 贡献
 
-Bug reports and pull requests are welcome. Before submitting a PR:
+欢迎提交 Bug 报告和 Pull Request。提交 PR 前请：
 
-1. Test the bridge script manually (see Troubleshooting)
-2. Test install + uninstall on a clean config
-3. Keep the no-dependency philosophy — bash + python3 + curl only
+1. 手动测试桥接脚本（见故障排查章节）
+2. 在干净配置上测试安装 + 卸载
+3. 保持零依赖原则——只用 bash + python3 + curl
 
-## Credits
+## 致谢
 
-Inspired by [CodeIsland](https://github.com/wxtsky/CodeIsland) — the excellent macOS Dynamic Island AI coding agent status panel that pioneered Claude Code hook monitoring.
+灵感来自 [CodeIsland](https://github.com/wxtsky/CodeIsland)——优秀的 macOS 灵动岛 AI 编码代理状态面板，率先展示了 Claude Code hook 监控的威力。
 
-## License
+## 许可证
 
-MIT — see [LICENSE](LICENSE)
+MIT — 详见 [LICENSE](LICENSE)
