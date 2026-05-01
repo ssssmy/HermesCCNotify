@@ -27,7 +27,7 @@ log() { echo "[$(date -Iseconds)] $*" >> "${LOG_FILE}"; }
 hmac_sign() {
     echo -n "$1" | python3 -c "
 import sys, hmac, hashlib
-key = bytes.fromhex('$(echo -n "${HERMES_SECRET}" | xxd -p | tr -d '\n')')
+key = '${HERMES_SECRET}'.encode()
 msg = sys.stdin.buffer.read()
 sig = hmac.new(key, msg, hashlib.sha256).hexdigest()
 print(f'sha256={sig}')
