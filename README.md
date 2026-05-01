@@ -42,8 +42,9 @@ Claude Code 开始干活...
 bridge.sh 从 stdin 接收事件 JSON
         │
         ├──→ macOS 系统通知（始终开启，即时弹出）
-        ├──→ Webhook POST（可选，任意 HTTP 端点）
-        └──→ 事件文件 → Hermes 定时任务 → Telegram/Discord/Slack
+        ├──→ 直接 Webhook POST（可选，任意 HTTP 端点）
+        └──→ Hermes Webhook → send_message → Telegram/Discord/Slack
+             ↑ 毫秒级事件驱动，零轮询
 ```
 
 ### 钩子系统
@@ -206,36 +207,49 @@ tail -20 ~/.code-notify/bridge.log
 
 ### 事件文件
 
-等待 Hermes 定时任务投递的事件暂存在 `~/.code-notify/events/`。文件命名格式：`<unix时间戳>-<session_id>.json`。
+诊断用事件暂存在 `~/.code-notify/events/`（仅当日志开启时）。文件命名格式：`<unix时间戳>-<session_id>.json`。Hermes webhook 集成后不再依赖此目录。
 
 ## Hermes 集成
 
-CodeNotify 可独立运行，但与 **Hermes Agent** 结合后体验最佳——将通知推送到你的即时通讯平台。
+CodeNotify 与 **Hermes Agent** 深度集成——通过内置 Webhook 系统实现毫秒级事件驱动投递，彻底告别轮询。
+
+### 工作原理
+
+bridge.sh 在 Claude Code 完成任务的瞬间，通过 HMAC-SHA256 签名 POST 到 Hermes 的 Webhook 端点。Hermes Gateway 接收事件，触发 Agent 格式化消息，通过 `send_message` 推送到 Telegram/Discord/Slack。
 
 ### 配置
 
-安装 CodeNotify 后，在 Hermes 中加载 `claude-code-notify` 技能，然后说：
+1. 启用 Hermes Webhook 平台（`~/.hermes/config.yaml`）：
 
-> **"setup claude code notify cron"**
+```yaml
+platforms:
+  webhook:
+    enabled: true
+    extra:
+      host: "0.0.0.0"
+      port: 8644
+      secret: "your-hmac-secret"
+```
 
-Hermes 会创建一个定时任务：
-1. 每分钟轮询 `~/.code-notify/events/`
-2. 读取新的完成事件
-3. 发送格式化消息到已连接的消息通道
-4. 清理已处理的文件
+2. 重启 Gateway：`hermes gateway restart`
 
-### 支持的消息通道
+3. 创建订阅：
 
-通过 Hermes 的 `send_message` 工具：
-- Telegram（频道、群组、私聊）
-- Discord（频道、讨论串）
-- Slack（频道）
+```bash
+hermes webhook subscribe claude-code-notify \
+  --prompt "Format and deliver this Claude Code completion notification..." \
+  --deliver origin \
+  --description "Claude Code 任务完成通知"
+```
 
-### 自定义投递目标
+4. 将返回的 Webhook URL 和 Secret 写入 `bridge.sh` 中的 `HERMES_WEBHOOK` 和 `HERMES_SECRET`。
 
-> **"send claude code notify to telegram:#my-channel"**
+### 优势
 
-Hermes 会更新定时任务，投递到你指定的通道。
+- **零延迟**：事件驱动，任务完成即刻推送
+- **零轮询**：不浪费 CPU、不占用 cron
+- **HMAC 签名**：安全验证，防伪造请求
+- **自动路由**：Hermes 自动投递到已连接的消息通道
 
 ## 对比 CodeIsland
 
